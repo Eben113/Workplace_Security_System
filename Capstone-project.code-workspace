@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../../../Desktop/Capstone-project"
+		},
+		{
+			"name": "Workplace_Security_System",
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"thx.h": "c"
+		}
+	}
+}
