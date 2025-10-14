@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <map>
 
 #define RX_PIN 16
 #define TX_PIN 17
@@ -12,6 +13,7 @@
 #define START_BYTE 0xEFAA
 #define END_BYTE   0x55
 
+extern std::map<int, String> err_code;
 
 
 class THX_SENSOR{

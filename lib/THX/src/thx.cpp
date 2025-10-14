@@ -1,6 +1,13 @@
 #include "thx.h"
 
 
+std::map<int, String> err_code = {
+    {-1,"No Face Detected"},
+    {-3,"Pose angle is too large"},
+    {-6 ,"2D live not passed"},
+    {-8,"Match Failed"},
+};
+
 void clearSerialBuffer(HardwareSerial& port) {
     while (port.available() > 0) {
         port.read();
@@ -58,9 +65,9 @@ int THX_SENSOR::readOut(){
               Serial.printf("User registered successfully. ID: %d\n", userId);
               return userId;
           }
-          else if (res == 0x01){
-              Serial.printf("No face detected\n");
-              return -1;}
+          else{
+              Serial.printf(err_code[-1*(int)res].c_str());
+              return -1* (int)res;}
           break;}
       else{
             if(_serial.read() == 0x00){
