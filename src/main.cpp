@@ -12,12 +12,12 @@
 HardwareSerial _serial1(2);
 THX_SENSOR sensor(_serial1);
 
-const char* ssid = "NITDA-ICT-HUB";
-const char* passwd = "6666.2524#";
+const char* ssid = " ";
+const char* passwd = " ";
 WebServer server(80);
 
-const int echoPin = GPIO_NUM_4;
-const int trigPin = GPIO_NUM_5;
+const int echoPin = GPIO_NUM_22;
+const int trigPin = GPIO_NUM_23;
 
 //const int buttonPin1 = 15;
 //const int buttonPin2 = 13;
@@ -25,18 +25,19 @@ const int trigPin = GPIO_NUM_5;
 const int redPin = GPIO_NUM_13;
 const int greenPin = GPIO_NUM_12;
 
-//const int lockPin;
+const int lockPin = GPIO_NUM_1;
 
 
 
 NewPing sonar = NewPing(trigPin, echoPin, MAX_DISTANCE);
 
+volatile bool isRegistering = false;
+
 
 void registerTask();
 void recognizeTask(void *pvParameters);
 bool buttonPressed(int pin);
-
-volatile bool isRegistering = false;
+void deleteUser(int id);
 
 void setup() {
   Serial.begin(115200);
@@ -58,15 +59,21 @@ void setup() {
   });
   server.on("/register", [](){registerTask();});
 
+  server.on("/delete", ([](){
+    int id = server.arg("id").toInt(); 
+    deleteUser(id);
+  }));
+
   server.begin();
 
   //pinMode(buttonPin1, INPUT_PULLUP);
   //pinMode(buttonPin2, INPUT);
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
+  pinMode(lockPin, OUTPUT);
 
 //xTaskCreate(registerTask, "RegisterTask", 4096, NULL, 1, NULL);
- // xTaskCreate(recognizeTask, "RecognizeTask", 4096, NULL, 1, NULL);
+  xTaskCreate(recognizeTask, "RecognizeTask", 8192, NULL, 1, NULL);
 
   Serial.println("System ready");
 
@@ -100,7 +107,7 @@ void registerTask(){
         server.send(200, "application/json", "{\"status\":\"ok\", \"user_id\":" + String(id) + "}");
         digitalWrite(redPin, LOW);
         digitalWrite(greenPin, HIGH);
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        delay(1500);
         digitalWrite(greenPin, LOW);
         break;
       }
@@ -117,10 +124,10 @@ void registerTask(){
 }
 
 void recognizeTask(void *pvParameters){
-  if(false){
   while(!isRegistering){
-    int _distance = sonar.ping_cm();
-    if(((_distance > 0) && _distance >= 25) && (_distance <= 75)){
+    unsigned long _distance = sonar.ping_cm();
+    Serial.printf("%d\n", _distance);
+    if((_distance >= 15) && (_distance <= 75)){
         digitalWrite(redPin, HIGH);
         Serial.println("Object detected, analyzing...");
         int id = sensor.sendCommand("recognize");
@@ -128,10 +135,10 @@ void recognizeTask(void *pvParameters){
           Serial.printf("recognized User: %d\n", id);
           digitalWrite(redPin, LOW);
           digitalWrite(greenPin, HIGH);
-          //digitalWrite(lockPin, HIGH);
+          digitalWrite(lockPin, HIGH);
           vTaskDelay(pdMS_TO_TICKS(2000));
           digitalWrite(greenPin, LOW);
-          //digitalWrite(lockPin, LOW);
+          digitalWrite(lockPin, LOW);
         }
         else{
           Serial.printf("Object not recognized");
@@ -139,6 +146,35 @@ void recognizeTask(void *pvParameters){
           digitalWrite(redPin, LOW);
         }
   }
-  vTaskDelay(pdMS_TO_TICKS(500));
+  vTaskDelay(pdMS_TO_TICKS(10000));
 }}
+
+
+void deleteUser(int id){
+  Serial.println("Deleting user...");
+  int res = sensor.sendCommand("delete", id);
+  if(res >= 0){
+    server.send(200, "application/json", "{\"status\":\"ok\", \"user_id\":" + String(res) + "}");
+  }
+  else{
+    server.send(200, "application/json", "{\"status\":\"failed\", \"error\":\"" + err_code[res] + "\"}");
+  }
 }
+
+
+
+/*const int lockPin = GPIO_NUM_27;
+
+void setup(){
+  pinMode(lockPin, OUTPUT);
+  Serial.begin(115200);
+}
+
+void loop(){
+  digitalWrite(lockPin, HIGH);
+  Serial.println("High");
+  delay(2000);
+  digitalWrite(lockPin, LOW);
+  Serial.println("Low");
+  delay(2000);
+}*/

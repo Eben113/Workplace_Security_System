@@ -54,6 +54,10 @@ int THX_SENSOR::readOut(){
             else if (res == 0x01){
                 Serial.printf("No face detected\n");
                 return -1;}
+            else{
+              Serial.printf("Recognition failed");
+              return -1;
+            }
           }
       else if (id == 0x13){
           uint8_t res = _serial.read();
@@ -69,9 +73,20 @@ int THX_SENSOR::readOut(){
               Serial.printf(err_code[-1*(int)res].c_str());
               return -1* (int)res;}
           break;}
+      else if (id == 0x20){
+          uint8_t res = _serial.read();
+          if(res == 0x00){
+              Serial.printf("User deleted successfully.");
+              return 0;
+          }
+          else{
+              Serial.printf(err_code[-1*(int)res].c_str());
+              return -1* (int)res;}
+          break;}
       else{
             if(_serial.read() == 0x00){
                 Serial.printf("Command Successful\n");
+                return 0;
             }
             else{
                 Serial.printf("Error");}
@@ -80,15 +95,15 @@ int THX_SENSOR::readOut(){
     }
     else{
         Serial.printf("No data yet, waiting....\n");
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        delay(5000);
     }
   }
 }
 
 
 
-int THX_SENSOR::sendCommand(std::string command){
-  uint8_t packet[8];
+int THX_SENSOR::sendCommand(std::string command, int id){
+  uint8_t packet[11];
   int idx = 0;
 
   packet[idx++] = 0xEF;
@@ -111,18 +126,32 @@ int THX_SENSOR::sendCommand(std::string command){
     packet[idx++] = 0x00;
     packet[idx++] = 0x12;
   }
+  else if (command == "delete")
+  {
+    packet[idx++] = 0x20;
+    packet[idx++] = 0x00;
+    packet[idx++] = 0x00;
+    packet[idx++] = 0x00;
+    packet[idx++] = 0x02;
+
+    packet[idx++] = (((uint16_t) id) >> 8) & 0xFF;
+    packet[idx++] = ((uint16_t) id) & 0xFF;
+
+    //Serial.printf("%u---%u", packet[7], packet[8]);
+    packet[idx++] = (0x22) + (uint16_t)id;
+  }
   else {
     Serial.println("Unknown command");
     return -1;
   }
 
   clearSerialBuffer(_serial);
-  vTaskDelay(pdMS_TO_TICKS(10));
+  delay(10);
 
-  _serial.write(packet, 8);
+  _serial.write(packet, 11);
   
   _serial.flush();
-  vTaskDelay(pdMS_TO_TICKS(20));
+  delay(20);
 
   Serial.printf("Sent Command: %s\n", command.c_str());
 

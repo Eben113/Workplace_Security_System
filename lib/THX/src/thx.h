@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include <map>
+#include <optional>
 
 #define RX_PIN 16
 #define TX_PIN 17
@@ -20,7 +21,7 @@ class THX_SENSOR{
     public:
         THX_SENSOR(HardwareSerial& serialPort);
         int readOut();
-        int sendCommand(std::string command);
+        int sendCommand(std::string command, int id = -1);
     private:
         HardwareSerial& _serial;
 };

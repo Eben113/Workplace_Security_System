@@ -214,7 +214,8 @@ const char index_html[] = R"rawliteral(
       tbody.appendChild(tr);
     }
 
-    function removeUser(id) {
+    async function removeUser(id) {
+      const res = await fetch(`${baseURL}/delete?id=${encodeURIComponent(id)}`);
       const tbody = document.getElementById("users-body");
       const rows = tbody.querySelectorAll("tr");
       rows.forEach(row => {
