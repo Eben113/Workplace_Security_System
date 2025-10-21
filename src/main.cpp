@@ -7,6 +7,7 @@
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
 #include "thx.h"
+#include "dashboard.h"
 
 #define MAX_DISTANCE 100
 
@@ -19,6 +20,7 @@ const char* passwd = "6666.2524#";
 // Firebase credentials
 #define API_KEY "AIzaSyBF3o9jzozoZt_ht-sQDgT2uAstzehDYPg"
 #define DATABASE_URL "https://workplace-security-system-default-rtdb.firebaseio.com/" 
+
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
@@ -26,68 +28,73 @@ FirebaseConfig config;
 WebServer server(80);
 
 // Pin definitions
-const int echoPin = 4;
-const int trigPin = 5;
-const int buzzer_pin = 14;
-const int redPin = 13;
-const int greenPin = 12;
-
-// const int lockPin;
+const int echoPin = GPIO_NUM_22;
+const int trigPin = GPIO_NUM_23;
+const int buzzer_pin = GPIO_NUM_14;
+const int redPin = GPIO_NUM_13;
+const int greenPin = GPIO_NUM_12;
+const int lockPin = GPIO_NUM_1;
 
 NewPing sonar = NewPing(trigPin, echoPin, MAX_DISTANCE);
-
 volatile bool isRegistering = false;
-// Task declarations
+
+// Function declarations
 void registerTask();
 void recognizeTask(void *pvParameters);
-
+bool buttonPressed(int pin);
+void deleteUser(int id);
 
 void setup() {
   Serial.begin(115200);
-  // put your setup code here, to run once:
+
+  // Connect to Wi-Fi
   WiFi.begin(ssid, passwd);
-  while(WiFi.status() != WL_CONNECTED){
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.print("Connected on local network");
+  Serial.print("Connected on local network: ");
   Serial.println(WiFi.localIP());
 
+  // Start mDNS
   if (MDNS.begin("doorlock")) {
     Serial.println("mDNS started, visit http://doorlock.local/");
   }
 
-  
-  // pinMode(buttonPin1, INPUT_PULLUP);
-  //pinMode(buttonPin2, INPUT);
+  // Web routes
+  server.on("/", []() {
+    Serial.println("got a user");
+    server.send_P(200, "text/html", index_html);
+  });
+  server.on("/register", []() { registerTask(); });
+  server.on("/delete", []() {
+    int id = server.arg("id").toInt();
+    deleteUser(id);
+  });
+  server.begin();
+
+  // Pin setup
   pinMode(buzzer_pin, OUTPUT);
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
+  pinMode(lockPin, OUTPUT);
 
-  // Firebase configuration
+  // Firebase setup
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
-
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
-  // Web server route for registration
-  server.on("/register", registerTask);
-  server.begin();
-
- // Face recognition task
-  xTaskCreate(recognizeTask, "RecognizeTask", 4096, NULL, 1, NULL);
+  // Start recognition task
+  xTaskCreate(recognizeTask, "RecognizeTask", 8192, NULL, 1, NULL);
 
   Serial.println("System ready");
-
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:4
   server.handleClient();
   vTaskDelay(pdMS_TO_TICKS(1000));
 }
-
 
 bool buttonPressed(int pin) {
   if (digitalRead(pin) == LOW) {
@@ -109,15 +116,14 @@ void registerTask() {
     id = sensor.sendCommand("register");
     if (id > 0) {
       Serial.printf("Registered User: %d\n", id);
-      String path = "/attendance/User_";
-      path += String(id);
-      // --- Log registration to Firebase ---
-      Firebase.RTDB.setString(&fbdo, (path + "/status").c_str(), "registered");
-      Firebase.RTDB.setTimestamp(&fbdo, (path + "/timestamp").c_str());
-      // --- Response to client ---
-      String jsonResponse = "{\"status\":\"ok\", \"user_id\":";
-      jsonResponse += String(id);
-      jsonResponse += "}";
+      String path = "/attendance/User_" + String(id);
+
+      // Log registration to Firebase
+      Firebase.RTDB.setString(&fbdo, path + "/status", "registered");
+      Firebase.RTDB.setTimestamp(&fbdo, path + "/timestamp");
+
+      // Response to client
+      String jsonResponse = "{\"status\":\"ok\", \"user_id\":" + String(id) + "}";
       server.send(200, "application/json", jsonResponse);
 
       digitalWrite(redPin, LOW);
@@ -133,50 +139,52 @@ void registerTask() {
   digitalWrite(redPin, LOW);
   if (id < 0) {
     Serial.println("Could not register user");
-    server.send(404, "application/json",
-                "{\"status\":\"failed\", \"error\":\"Could not register user\"}");
+    server.send(404, "application/json", "{\"status\":\"failed\", \"error\":\"Could not register user\"}");
   }
 
   isRegistering = false;
 }
 
 // RECOGNIZE TASK
-void recognizeTask(void *pvParameters){
-  while(!isRegistering){
-    int _distance = sonar.ping_cm();
-    if(((_distance > 0) && _distance >= 25) && (_distance <= 75)){
-        digitalWrite(redPin, HIGH);
-        Serial.println("Object detected, analyzing...");
-        int id = sensor.sendCommand("recognize");
-        if(id >= 0){
-          Serial.printf("recognized User: %d\n", id);
-          digitalWrite(redPin, LOW);
-          digitalWrite(greenPin, HIGH);
+void recognizeTask(void *pvParameters) {
+  while (!isRegistering) {
+    unsigned long _distance = sonar.ping_cm();
+    Serial.printf("%d\n", _distance);
+    if ((_distance >= 15) && (_distance <= 75)) {
+      digitalWrite(redPin, HIGH);
+      Serial.println("Object detected, analyzing...");
+      int id = sensor.sendCommand("recognize");
+      if (id >= 0) {
+        Serial.printf("Recognized User: %d\n", id);
+        digitalWrite(redPin, LOW);
+        digitalWrite(greenPin, HIGH);
 
-          // --- Activate buzzer briefly ---
-          tone(buzzer_pin, 1000, 300);
+        // --- Activate buzzer briefly ---
+        tone(buzzer_pin, 1000, 300);
 
-          // --- Log recognition to Firebase ---
-          String path = "/attendance/User_";
-          path += String(id);
+        // --- Log recognition to Firebase ---
+        String path = "/attendance/User_" + String(id);
+        Firebase.RTDB.setString(&fbdo, path + "/status", "recognized");
+        Firebase.RTDB.setTimestamp(&fbdo, path + "/timestamp");
 
-          String statusPath = path + "/status";
-          String timePath = path + "/timestamp";
-          Firebase.RTDB.setString(&fbdo, statusPath.c_str(), "recognized");
-          Firebase.RTDB.setTimestamp(&fbdo, timePath.c_str());
-
-
-          // digitalWrite(lockPin, HIGH);
-          vTaskDelay(pdMS_TO_TICKS(2000));
-          digitalWrite(greenPin, LOW);
-          // digitalWrite(lockPin, LOW);
-        }
-        else{
-          Serial.printf("Object not recognized");
-          vTaskDelay(pdMS_TO_TICKS(10));
-          digitalWrite(redPin, LOW);
-        }
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        digitalWrite(greenPin, LOW);
+      } else {
+        Serial.println("Object not recognized");
+        vTaskDelay(pdMS_TO_TICKS(10));
+        digitalWrite(redPin, LOW);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(10000));
   }
-  vTaskDelay(pdMS_TO_TICKS(500));
 }
+
+void deleteUser(int id) {
+  Serial.println("Deleting user...");
+  int res = sensor.sendCommand("delete", id);
+  if (res >= 0) {
+    server.send(200, "application/json", "{\"status\":\"ok\", \"user_id\":" + String(res) + "}");
+  } else {
+    server.send(200, "application/json", "{\"status\":\"failed\", \"error\":\"Could not delete user\"}");
+  }
 }
