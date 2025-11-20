@@ -174,6 +174,43 @@ const char index_html[] = R"rawliteral(
 
   <script>
     const baseURL = window.location.origin; // e.g. http://doorlock.local
+    
+    const DB_URL = "https://workplace-security-system-default-rtdb.firebaseio.com/";
+    const ATTENDANCE_PATH = "attendance.json";
+    const API_KEY = "AIzaSyBF3o9jzozoZt_ht-sQDgT2uAstzehDYPg"; // Recommended for authentication
+
+    async function fetchAttendanceRecords() {
+        const url = `${DB_URL}${ATTENDANCE_PATH}?auth=${API_KEY}`; 
+
+    try {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // The response body is a JSON object containing all children of the /attendance node
+        const data = await response.json(); 
+
+
+        const tbody = document.getElementById("users-body");
+        tbody.innerHTML = '';
+        
+        console.log("Fetched Data:", data);
+        for (const userId in data) {
+            if (data.hasOwnProperty(userId)) {
+                const record = data[userId];
+                const readableTime = new Date(record.last_seen).toLocaleString();
+                console.log(`User ID: ${userId}, Name: ${record.name}, Last Seen: ${readableTime}`);
+                addUserToList(record.name, userId, readableTime);
+            }
+        }
+        return data;
+      }
+    catch(err){
+    console.error("Error fetching data from Firebase:", err);
+    }
+  }
 
     // Handle registration form
     document.getElementById("register-form").addEventListener("submit", async (e) => {
@@ -188,8 +225,9 @@ const char index_html[] = R"rawliteral(
       if(data.status == "ok"){
         output.style.backgroundColor = "#d4edda";
         output.innerText = `Success: ${name} has been registered`;
+        await fetchAttendanceRecords();
         // Refresh the users list
-        addUserToList(name, data.user_id, new Date().toLocaleString());
+        //addUserToList(name, data.user_id, new Date().toLocaleString());
       }
         else{
         output.style.backgroundColor = "#f8d7da";
@@ -216,16 +254,11 @@ const char index_html[] = R"rawliteral(
 
     async function removeUser(id) {
       const res = await fetch(`${baseURL}/delete?id=${encodeURIComponent(id)}`);
-      const tbody = document.getElementById("users-body");
-      const rows = tbody.querySelectorAll("tr");
-      rows.forEach(row => {
-        if (row.children[1].innerText == id) {
-          tbody.removeChild(row);
-        }
-      });
+      await fetchAttendanceRecords();
       // Later: send delete request to ESP
       console.log("Remove user ID:", id);
-    }
+    };
+    fetchAttendanceRecords();
   </script>
 </body>
 </html>
