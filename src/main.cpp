@@ -17,12 +17,9 @@
 HardwareSerial _serial1(2);
 THX_SENSOR sensor(_serial1);
 
-const char* ssid = "WOSEMUNILAG IPEXPRESS FIBER"; 
-//"Ayo";
-//"NITDA-ICT-HUB";
-const char* passwd = "Wos1987@unilag"; 
-//"ebenezer";
-//"6666.2524#";
+const char* ssid = "YOUR_WIFI_NAME"; 
+
+const char* passwd = "WIFI_PASSWORD"; 
 
 #define API_KEY "AIzaSyBF3o9jzozoZt_ht-sQDgT2uAstzehDYPg"
 #define DATABASE_URL "https://workplace-security-system-default-rtdb.firebaseio.com/" 
