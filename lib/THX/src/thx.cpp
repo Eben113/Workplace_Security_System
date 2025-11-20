@@ -6,6 +6,7 @@ std::map<int, String> err_code = {
     {-3,"Pose angle is too large"},
     {-6 ,"2D live not passed"},
     {-8,"Match Failed"},
+    {-10, "Timeout"}
 };
 
 void clearSerialBuffer(HardwareSerial& port) {
@@ -22,7 +23,8 @@ THX_SENSOR::THX_SENSOR(HardwareSerial& serialPort) :_serial(serialPort){
 
 
 int THX_SENSOR::readOut(){
-  while(1){
+  int time = millis();
+  while((millis() - time) < 2000){
     if(_serial.available() > 7){
       Serial.println("Got Something, Checking...");
       uint8_t sync[2];
@@ -95,9 +97,10 @@ int THX_SENSOR::readOut(){
     }
     else{
         Serial.printf("No data yet, waiting....\n");
-        delay(5000);
+        delay(200);
     }
   }
+  return -10;
 }
 
 
@@ -156,5 +159,6 @@ int THX_SENSOR::sendCommand(std::string command, int id){
   Serial.printf("Sent Command: %s\n", command.c_str());
 
   int result = readOut();
+  Serial.printf("result: %d", result);
   return result;
 };
